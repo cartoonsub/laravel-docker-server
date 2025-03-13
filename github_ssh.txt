@@ -1,0 +1,18 @@
+Авторизация github через SSH
+
+шаг 1: Проверка наличия ключей
+ls -al ~/.ssh
+
+шаг 2: Генерация нового ключа
+; ssh-keygen -o -t rsa -C "example@example.ru"
+ssh-keygen -o -t rsa -C "example@example.ru"
+
+шаг 3: копирование ключа в буфер обмена
+cat id_rsa.pub
+
+шаг 4: добавление ключа на github
+// Переходим в настройки аккаунта -> SSH and GPG keys -> New SSH key
+// Вставляем ключ из буфера обмена и сохраняем
+
+Для клонирования репозитория через SSH:
+git clone git@github.com:repository.git

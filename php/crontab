@@ -1,0 +1,9 @@
+# * * * * * php /var/www/html/artisan schedule:run >> /dev/null 2>&1
+# * * * * * php /var/www/html/artisan schedule:run >> /var/log/cron.log 2>&1
+
+# * * * * * echo "Cron job executed at $(date)" >> /var/log/cron/cron.log 2>&1
+
+# * * * * * cd /var/www/html && /usr/local/bin/php artisan schedule:run >> /var/log/cron.log 2>&1
+
+# Запуск планировщика задач Laravel
+* * * * * cd /var/www/html && /usr/local/bin/php artisan schedule:run >> /dev/null 2>&1

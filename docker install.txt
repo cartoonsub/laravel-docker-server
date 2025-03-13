@@ -1,0 +1,30 @@
+Шаг 1. Сначала обновим пакеты, которые уже существуют:
+sudo apt update
+
+Шаг 2. Установим необходимые пакеты:
+sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+
+Шаг 3. Добавим ключ GPG для репозитория Docker:
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+
+Шаг 4. Добавим репозиторий Docker в APT:
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
+
+Шаг 5. Обновим индекс пакетов APT:
+sudo apt update
+
+Шаг 6. Убедимся, что мы собираемся установить его именно из репозитория Docker:
+sudo apt-cache policy docker-ce
+
+Шаг 7. Установим Docker:
+; sudo apt install -y docker-ce
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+Шаг 8. Проверим статус службы Docker:
+sudo systemctl status docker
+
+Если служба не запущена, запустим ее:
+sudo systemctl start docker
+
+; Шаг 9. Добавим пользователя в группу docker:
+; sudo usermod -aG docker ${USER}

@@ -1,0 +1,7 @@
+nginx docker install
+
+Базовый запуск образа:
+    docker run -it --rm -d -p 8080:80 --name web nginx
+
+Подключение к контейнеру:
+    docker exec -it web bash
