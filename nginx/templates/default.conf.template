@@ -33,15 +33,28 @@ server {
     root /var/www/html/public;
     index index.php index.html;
 
+    # Resolve the PHP container lazily so nginx starts even when php is down.
+    # 127.0.0.11 is Docker's embedded DNS server.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    set $php_upstream php_server:9000;
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
     location / {
         try_files $uri $uri/ /index.php?$query_string;
     }
 
     location ~ \.php$ {
         include fastcgi_params;
-        fastcgi_pass php_server:9000;
+        fastcgi_pass $php_upstream;
         fastcgi_index index.php;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        # Long-running requests: movie uploads and processing.
+        fastcgi_read_timeout 3600s;
+        fastcgi_send_timeout 3600s;
+        fastcgi_request_buffering off;
     }
 
     location ~ /\.ht {

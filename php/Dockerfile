@@ -36,10 +36,13 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Установка и активация Redis
+# Установка и активация Redis (версия зафиксирована для воспроизводимой сборки)
 RUN pecl channel-update pecl.php.net \
-    && pecl install redis \
+    && pecl install redis-6.0.2 \
     && docker-php-ext-enable redis
+
+# Кастомные настройки PHP (лимиты загрузки, opcache)
+COPY php.ini /usr/local/etc/php/conf.d/zz-custom.ini
 
 # Node.js 22 LTS + npm.
 # Нужен в рантайм-образе: сборка ассетов (npm install / npm run build)

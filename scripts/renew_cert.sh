@@ -6,7 +6,13 @@ set -eu
 PROJECT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
 
-docker compose exec -T certbot certbot renew --webroot -w /var/www/certbot --force-renewal
+# --force-renewal only on explicit request: it burns the Let's Encrypt
+# duplicate-certificate limit (5 per week).
+if [ "${1:-}" = "--force" ]; then
+    docker compose exec -T certbot certbot renew --webroot -w /var/www/certbot --force-renewal
+else
+    docker compose exec -T certbot certbot renew --webroot -w /var/www/certbot
+fi
 
 # nginx reloads itself when it detects changed certificates,
 # but reload explicitly to apply immediately.

@@ -41,7 +41,7 @@ mkdir -p "$CERT_DIR"
 if ! sync_certs; then
     if [ ! -f "${CERT_DIR}/fullchain.pem" ]; then
         echo "No certificate available yet, generating temporary self-signed certificate for ${DOMAIN}"
-        openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+        openssl req -x509 -nodes -newkey rsa:2048 -days 30 \
             -keyout "${CERT_DIR}/privkey.pem" \
             -out "${CERT_DIR}/fullchain.pem" \
             -subj "/CN=${DOMAIN}"
@@ -62,6 +62,12 @@ trap cleanup TERM INT
 while :; do
     sleep 60 &
     wait $! || true
+
+    # If nginx died, exit so the container restarts instead of idling.
+    if ! kill -0 "$NGINX_PID" 2>/dev/null; then
+        echo "nginx exited unexpectedly, stopping container" >&2
+        exit 1
+    fi
 
     if sync_certs; then
         if nginx -t; then

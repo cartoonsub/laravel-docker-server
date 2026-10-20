@@ -16,9 +16,14 @@ services:
       - ./nginx/ssl:/etc/nginx/ssl
       - ./nginx/certbot/www:/var/www/certbot:ro
       - ./nginx/certbot/conf:/etc/letsencrypt:ro
-    depends_on:
-      php:
-        condition: service_started
+    # No depends_on php: nginx resolves the upstream lazily (resolver 127.0.0.11),
+    # so a failed DB/PHP start cannot block ACME challenge and certificate renewal.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null --no-check-certificate https://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     logging: &default-logging
       driver: "json-file"
       options:
@@ -59,19 +64,26 @@ services:
     volumes:
       - ${PROJECT_DIR}:/var/www/html
       - ./logs/php:/var/log/php
+      # PHP writes incoming uploads here before the app moves them.
+      - ./tmp/php:/var/tmp/php-uploads
     depends_on:
       mariadb:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "php -r 'exit(@fsockopen(\"127.0.0.1\",9000)?0:1);'"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     logging: *default-logging
     networks:
       - webnet
 
   # Laravel queue worker (php artisan queue:work)
   queue:
-    build:
-      context: ./php
+    # Reuses the image built by the php service (no second build).
     image: laravel-docker-server/php:latest
     container_name: queue_worker
     restart: unless-stopped
@@ -83,10 +95,14 @@ services:
       - ${PROJECT_DIR}:/var/www/html
       - ./logs/php:/var/log/php
     depends_on:
+      php:
+        condition: service_started
       mariadb:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # Give the worker time to finish the current job on `docker stop`.
+    stop_grace_period: 30s
     logging: *default-logging
     networks:
       - webnet
@@ -97,7 +113,7 @@ services:
     restart: unless-stopped
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
       interval: 10s

@@ -14,13 +14,22 @@ fix_permissions() {
         /var/www/html/storage/logs \
         /var/www/html/bootstrap/cache
 
-    chown -R www-data:www-data \
-        /var/www/html/storage \
-        /var/www/html/bootstrap/cache 2>/dev/null || true
+    # Recursive chown is slow on large log/cache trees, so only do it when
+    # the ownership is actually wrong.
+    if [ "$(stat -c %U /var/www/html/storage 2>/dev/null)" != "www-data" ]; then
+        chown -R www-data:www-data \
+            /var/www/html/storage \
+            /var/www/html/bootstrap/cache 2>/dev/null || true
+    fi
 
     chmod -R ug+rwX \
         /var/www/html/storage \
         /var/www/html/bootstrap/cache 2>/dev/null || true
+
+    # Upload temp dir is bind-mounted from the host and may be root-owned.
+    mkdir -p /var/tmp/php-uploads
+    chown www-data:www-data /var/tmp/php-uploads 2>/dev/null || true
+    chmod 700 /var/tmp/php-uploads 2>/dev/null || true
 }
 
 fix_permissions
