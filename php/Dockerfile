@@ -41,33 +41,40 @@ RUN pecl channel-update pecl.php.net \
     && pecl install redis \
     && docker-php-ext-enable redis
 
-# Установка NodeJS
-RUN curl -fsSL https://deb.nodesource.com/setup_21.x | bash - \
-    && apt-get install -y nodejs
+# Node.js 22 LTS + npm.
+# Нужен в рантайм-образе: сборка ассетов (npm install / npm run build)
+# выполняется прямо на сервере внутри контейнера.
+# Node 21 был EOL (июнь 2024), 22 — актуальный LTS.
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Установка Composer
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+# Composer из официального образа (без curl-инсталлятора)
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Установка Cron
-# todo Перенести в отдельный контейнер или брать из файла crontab
-RUN apt-get update && apt-get install -y cron
-RUN echo "* * * * * cd /var/www/html && /usr/local/bin/php artisan schedule:run >> /dev/null 2>&1" | crontab -
+# Cron для планировщика Laravel
+RUN apt-get update && apt-get install -y cron \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Расписание Laravel ставится в crontab www-data при старте контейнера
+COPY crontab /usr/local/etc/laravel-crontab
 
 # Установка часового пояса на Europe/Moscow
 RUN ln -snf /usr/share/zoneinfo/Europe/Moscow /etc/localtime && echo "Europe/Moscow" > /etc/timezone
 
-# Установка прав на директории
-# todo - не работает, нужно разобраться. Возможно, папки создаются позже
-RUN mkdir -p /var/www/html/storage/app/public \
-    && mkdir -p /var/www/html/storage/framework/{cache,sessions,views} \
-    && mkdir -p /var/www/html/storage/logs \
-    && chown -R www-data:www-data /var/www/html \
-    && chmod -R 775 /var/www/html/storage
+# Права на storage/bootstrap-cache выставляются в entrypoint.sh:
+# bind-mount проекта перекрывает всё, что создано на этапе сборки.
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN tr -d '\r' < /usr/local/bin/entrypoint.sh > /tmp/entrypoint.sh \
+    && mv /tmp/entrypoint.sh /usr/local/bin/entrypoint.sh \
+    && chmod +x /usr/local/bin/entrypoint.sh
 
-# Установка рабочей директории
 WORKDIR /var/www/html
 
-# Обновление PATH
 ENV PATH="/usr/local/bin:$PATH"
 
-CMD ["sh", "-c", "cron && php-fpm"]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+# php-fpm как PID 1 — корректный stop и рестарт при падении
+CMD ["php-fpm"]

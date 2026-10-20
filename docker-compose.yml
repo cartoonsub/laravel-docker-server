@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   nginx:
     build:
@@ -18,6 +16,14 @@ services:
       - ./nginx/ssl:/etc/nginx/ssl
       - ./nginx/certbot/www:/var/www/certbot:ro
       - ./nginx/certbot/conf:/etc/letsencrypt:ro
+    depends_on:
+      php:
+        condition: service_started
+    logging: &default-logging
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - webnet
 
@@ -40,17 +46,48 @@ services:
       - ./nginx/certbot/conf:/etc/letsencrypt
     depends_on:
       - nginx
+    logging: *default-logging
     networks:
       - webnet
 
   php:
     build:
       context: ./php
+    image: laravel-docker-server/php:latest
     container_name: php_server
     restart: unless-stopped
     volumes:
       - ${PROJECT_DIR}:/var/www/html
       - ./logs/php:/var/log/php
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    logging: *default-logging
+    networks:
+      - webnet
+
+  # Laravel queue worker (php artisan queue:work)
+  queue:
+    build:
+      context: ./php
+    image: laravel-docker-server/php:latest
+    container_name: queue_worker
+    restart: unless-stopped
+    command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3", "--max-time=3600"]
+    environment:
+      # Only the php service runs the scheduler
+      RUN_CRON: "0"
+    volumes:
+      - ${PROJECT_DIR}:/var/www/html
+      - ./logs/php:/var/log/php
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    logging: *default-logging
     networks:
       - webnet
 
@@ -58,11 +95,16 @@ services:
     image: redis:latest
     container_name: redis_container
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     environment:
-      - REDIS_PASSWORD=secret_redis
-    command: ["redis-server", "--requirepass", "secret_redis"]
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging: *default-logging
     networks:
       - webnet
 
@@ -76,16 +118,23 @@ services:
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       TZ: Europe/Moscow
-    ports:
-      - "3306:3306"
     volumes:
       - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    # NOTE: --default-authentication-plugin is a MySQL option, not MariaDB.
+    # Passing it to MariaDB 11.x makes the server fail to start.
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    logging: *default-logging
     networks:
       - webnet
-    command: >
-      --character-set-server=utf8mb4 
-      --collation-server=utf8mb4_unicode_ci
-      --default-authentication-plugin=mysql_native_password
+
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
     container_name: phpmyadmin_container
@@ -94,8 +143,13 @@ services:
       PMA_HOST: mariadb_container
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       UPLOAD_LIMIT: 100000000
+    # Bound to localhost only: reach it via SSH tunnel, not from the internet.
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    logging: *default-logging
     networks:
       - webnet
 
