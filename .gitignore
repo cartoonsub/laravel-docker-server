@@ -21,4 +21,8 @@ Homestead.yaml
 Homestead.json
 /.vagrant
 .phpunit.result.cache
+
+# Certificates: never commit private keys
 nginx/ssl/
+nginx/certbot/conf/
+nginx/certbot/www/

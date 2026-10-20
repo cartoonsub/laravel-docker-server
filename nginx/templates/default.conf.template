@@ -1,0 +1,57 @@
+# HTTP: ACME challenge + redirect to HTTPS
+server {
+    listen 80;
+    server_name ${SERVER_NAME};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${SERVER_NAME};
+
+    # Active certificates are synced from /etc/letsencrypt by the entrypoint.
+    # Until the first Let's Encrypt certificate is issued, a temporary
+    # self-signed certificate is used here.
+    ssl_certificate     /etc/nginx/ssl/active/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/active/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    root /var/www/html/public;
+    index index.php index.html;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_pass php_server:9000;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|webp)$ {
+        expires max;
+        log_not_found off;
+        access_log off;
+        try_files $uri =404;
+    }
+}
