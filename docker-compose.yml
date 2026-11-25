@@ -80,6 +80,7 @@ services:
     logging: *default-logging
     networks:
       - webnet
+      - cartoon-network
 
   # Laravel queue worker (php artisan queue:work)
   queue:
@@ -106,6 +107,7 @@ services:
     logging: *default-logging
     networks:
       - webnet
+      - cartoon-network
 
   redis:
     image: redis:latest
@@ -172,6 +174,9 @@ services:
 networks:
   webnet:
     driver: bridge
+  cartoon-network:
+    external: true
+    name: cartoon-network
 
 volumes:
   mariadb_data:
